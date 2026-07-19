@@ -1,0 +1,125 @@
+{
+  "design": "Phần 1 — Việc 3: Kafka Topic Design cho pipeline CPG (Code Property Graph)",
+  "environment": "lab (single-broker Kafka, replication_factor=1)",
+  "conventions": {
+    "required_fields_every_message": {
+      "schema_version": "string — version schema của message, vd '1.0.0' (SemVer). Cho phép evolve schema mà không vỡ consumer.",
+      "event_time": "string (ISO-8601 UTC, vd '2026-07-19T10:30:00Z') — thời điểm sự kiện phát sinh (event time, không phải ingest time)."
+    },
+    "serialization": "JSON (UTF-8), 1 message = 1 JSON object",
+    "partition_key_rationale": "Chọn key sao cho các event liên quan tới cùng 1 file / 1 node rơi vào cùng partition -> giữ đúng thứ tự (ordering) khi xử lý; đồng thời phân tán tải đều giữa các partition."
+  },
+  "topics": [
+    {
+      "name": "cpg.node.events",
+      "purpose": "Sự kiện về NODE của graph (mỗi hàm/class/module... parse ra 1 node).",
+      "partitions": 3,
+      "replication_factor": 1,
+      "config": {
+        "retention.ms": 604800000,
+        "retention.bytes": -1,
+        "cleanup.policy": "delete",
+        "max.message.bytes": 1048576
+      },
+      "partition_key": {
+        "field": "file_path",
+        "reason": "Mọi node cùng 1 file vào cùng partition -> giữ thứ tự node trong file, thuận cho downstream build graph theo file."
+      },
+      "message_schema": {
+        "schema_version": "1.0.0",
+        "event_time": "2026-07-19T10:30:00Z",
+        "event_type": "node_created",
+        "node_id": "accelerate/src/accelerate/accelerator.py::class::Accelerator",
+        "node_type": "class",
+        "name": "Accelerator",
+        "file_path": "src/accelerate/accelerator.py",
+        "start_line": 120,
+        "end_line": 450,
+        "properties": { "language": "python", "decorators": [] }
+      }
+    },
+    {
+      "name": "cpg.edge.events",
+      "purpose": "Sự kiện về EDGE giữa 2 node (calls, imports, contains, inherits...).",
+      "partitions": 3,
+      "replication_factor": 1,
+      "config": {
+        "retention.ms": 604800000,
+        "retention.bytes": -1,
+        "cleanup.policy": "delete",
+        "max.message.bytes": 1048576
+      },
+      "partition_key": {
+        "field": "src_node_id",
+        "reason": "Group theo node nguồn -> các cạnh đi ra từ cùng 1 node cùng partition, thuận cho traversal/graph build phía consumer."
+      },
+      "message_schema": {
+        "schema_version": "1.0.0",
+        "event_time": "2026-07-19T10:30:05Z",
+        "event_type": "edge_created",
+        "edge_id": "e:call:accelerator.py:L130->utils.py:L12",
+        "edge_type": "calls",
+        "src_node_id": "accelerate/src/accelerate/accelerator.py::class::Accelerator",
+        "dst_node_id": "accelerate/src/accelerate/utils/other.py::func::save",
+        "file_path": "src/accelerate/accelerator.py",
+        "properties": { "call_line": 130 }
+      }
+    },
+    {
+      "name": "cpg.source.metadata.events",
+      "purpose": "Metadata cấp FILE nguồn (path, số dòng, hash, ngôn ngữ, kept/excluded).",
+      "partitions": 3,
+      "replication_factor": 1,
+      "config": {
+        "retention.ms": 1209600000,
+        "retention.bytes": -1,
+        "cleanup.policy": "delete",
+        "max.message.bytes": 1048576
+      },
+      "partition_key": {
+        "field": "file_path",
+        "reason": "Metadata gắn với 1 file -> partition theo file_path để mọi cập nhật của cùng file có thứ tự nhất quán."
+      },
+      "message_schema": {
+        "schema_version": "1.0.0",
+        "event_time": "2026-07-19T10:29:50Z",
+        "event_type": "source_registered",
+        "file_path": "src/accelerate/accelerator.py",
+        "repository": "huggingface/accelerate",
+        "language": "python",
+        "loc": 1450,
+        "size_bytes": 60123,
+        "content_sha256": "d2f1...ab",
+        "excluded": false,
+        "exclude_reasons": []
+      }
+    },
+    {
+      "name": "cpg.parser.error.events",
+      "purpose": "Sự kiện LỖI khi parse 1 file (syntax error, encoding, timeout...). Dead-letter cho pipeline.",
+      "partitions": 3,
+      "replication_factor": 1,
+      "config": {
+        "retention.ms": 2592000000,
+        "retention.bytes": -1,
+        "cleanup.policy": "delete",
+        "max.message.bytes": 1048576
+      },
+      "partition_key": {
+        "field": "file_path",
+        "reason": "Lỗi gắn với file cụ thể -> partition theo file_path để gom mọi lỗi của cùng file; giữ retention dài (30 ngày) để điều tra."
+      },
+      "message_schema": {
+        "schema_version": "1.0.0",
+        "event_time": "2026-07-19T10:30:10Z",
+        "event_type": "parse_error",
+        "file_path": "examples/legacy/old_script.py",
+        "error_type": "SyntaxError",
+        "error_message": "invalid syntax (line 42)",
+        "stage": "ast_parse",
+        "severity": "error",
+        "stack_hash": "9ab3...ff"
+      }
+    }
+  ]
+}
