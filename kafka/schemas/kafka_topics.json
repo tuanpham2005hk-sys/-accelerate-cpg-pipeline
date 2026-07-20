@@ -12,7 +12,7 @@
   "topics": [
     {
       "name": "cpg.node.events",
-      "purpose": "Sự kiện về NODE của graph (mỗi hàm/class/module... parse ra 1 node).",
+      "purpose": "Sự kiện upsert/delete cho AST node và external call symbol của CPG.",
       "partitions": 3,
       "replication_factor": 1,
       "config": {
@@ -28,19 +28,22 @@
       "message_schema": {
         "schema_version": "1.0.0",
         "event_time": "2026-07-19T10:30:00Z",
-        "event_type": "node_created",
-        "node_id": "accelerate/src/accelerate/accelerator.py::class::Accelerator",
-        "node_type": "class",
+        "event_type": "node_upsert",
+        "node_id": "n:663f9dced11735709df3dc6ab7d1e760204baa6b26bc679505d9b581a63e7963",
+        "node_type": "ClassDef",
         "name": "Accelerator",
         "file_path": "src/accelerate/accelerator.py",
+        "scope": "<module>",
         "start_line": 120,
         "end_line": 450,
-        "properties": { "language": "python", "decorators": [] }
+        "start_col": 0,
+        "end_col": 20,
+        "properties": { "language": "python", "qualified_name": "Accelerator", "decorators": [] }
       }
     },
     {
       "name": "cpg.edge.events",
-      "purpose": "Sự kiện về EDGE giữa 2 node (calls, imports, contains, inherits...).",
+      "purpose": "Sự kiện upsert/delete cho AST_CHILD, CFG, DFG và CALL edge.",
       "partitions": 3,
       "replication_factor": 1,
       "config": {
@@ -56,13 +59,13 @@
       "message_schema": {
         "schema_version": "1.0.0",
         "event_time": "2026-07-19T10:30:05Z",
-        "event_type": "edge_created",
-        "edge_id": "e:call:accelerator.py:L130->utils.py:L12",
-        "edge_type": "calls",
-        "src_node_id": "accelerate/src/accelerate/accelerator.py::class::Accelerator",
-        "dst_node_id": "accelerate/src/accelerate/utils/other.py::func::save",
+        "event_type": "edge_upsert",
+        "edge_id": "e:89840adb971b7a689a2a5c6f62709371692764d6be7ae2121d424c2813f8086e",
+        "edge_type": "CALL",
+        "src_node_id": "n:663f9dced11735709df3dc6ab7d1e760204baa6b26bc679505d9b581a63e7963",
+        "dst_node_id": "n:2f60d7fbd8142b2fd7fc60bbfc39b889121483706105bed8255952b6ff524001",
         "file_path": "src/accelerate/accelerator.py",
-        "properties": { "call_line": 130 }
+        "properties": { "target": "is_deepspeed_available", "call_line": 135 }
       }
     },
     {
@@ -83,15 +86,17 @@
       "message_schema": {
         "schema_version": "1.0.0",
         "event_time": "2026-07-19T10:29:50Z",
-        "event_type": "source_registered",
+        "event_type": "source_upsert",
+        "file_id": "f:5dcffc66b4d9a52a42be4b498760ad39b1b29ee52d6d6e825879f3932c03a1e9",
         "file_path": "src/accelerate/accelerator.py",
         "repository": "huggingface/accelerate",
         "language": "python",
-        "loc": 1450,
-        "size_bytes": 60123,
-        "content_sha256": "d2f1...ab",
-        "excluded": false,
-        "exclude_reasons": []
+        "loc": 4359,
+        "size_bytes": 201947,
+        "content_sha256": "8df2adef187bb2c15c937d0941c9b0ee2bddd4a2ddd503695055422ad2d83ecc",
+        "parser": "python-ast",
+        "parser_service_version": "1.0.0",
+        "counts": { "nodes": 16139, "edges": 20448, "ast_child_edges": 15836, "cfg_edges": 1877, "dfg_edges": 1882, "call_edges": 853 }
       }
     },
     {
@@ -113,7 +118,10 @@
         "schema_version": "1.0.0",
         "event_time": "2026-07-19T10:30:10Z",
         "event_type": "parse_error",
+        "error_id": "err:stable-sha256",
+        "repository": "huggingface/accelerate",
         "file_path": "examples/legacy/old_script.py",
+        "content_sha256": "sha256-of-invalid-source",
         "error_type": "SyntaxError",
         "error_message": "invalid syntax (line 42)",
         "stage": "ast_parse",

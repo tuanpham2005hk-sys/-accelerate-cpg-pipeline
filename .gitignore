@@ -7,6 +7,11 @@ accelerate/
 # Python
 __pycache__/
 *.pyc
+.pytest_cache/
+
+# Parser runtime state / generated event logs
+output/parser_state/
+output/parser_events*.jsonl
 
 # OS
 Thumbs.db
