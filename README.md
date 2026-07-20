@@ -1,4 +1,6 @@
-# Phần 1 — File Discovery & Kafka Topic Design
+# Accelerate CPG Streaming Pipeline - Lab 04
+
+## Phần 1 - File Discovery & Kafka Topic Design
 
 Đồ án Big Data (Spark Streaming) · Repo nguồn: **huggingface/accelerate** · Môi trường: **lab (single-broker Kafka)**
 
@@ -11,10 +13,10 @@
 
 | Thành phần | Phiên bản |
 |---|---|
-| Docker | 29.3.1 |
-| Docker Compose | v5.1.1 |
-| git | 2.54.0 |
-| Python | 3.13.0 |
+| Docker | 29.4.0 |
+| Docker Compose | v5.1.2 |
+| git | 2.47.0.windows.2 |
+| Python | 3.12.10 |
 | Kafka / Zookeeper image | confluentinc/cp-kafka:7.6.1 · cp-zookeeper:7.6.1 |
 
 Kafka được dựng **thật** bằng Docker, 4 topic được tạo **thật** và verify bằng `kafka-topics --list` (không mock).
@@ -124,3 +126,84 @@ accelerate-cpg-lab4/
 - ✅ Tổng số file `.py`: **197** (giữ 142 / loại 55) — lưu JSON.
 - ✅ 4 topic thiết kế đầy đủ, mỗi message có `schema_version` + `event_time`, partition key hợp lý.
 - ✅ Kafka **thật** dựng bằng Docker → tạo topic thật → verify **4/4 PASS**.
+
+---
+
+## Phần 2 - Incremental CPG Parser Service
+
+Parser dùng thư viện chuẩn Python `ast`, xử lý từng file một và phát bốn nhóm
+dữ liệu: AST nodes/child edges, CFG edges, DFG edges và Call edges. Mỗi phần tử
+có ID SHA-256 ổn định; state riêng theo file cho phép replay/upsert và phát
+`node_delete`/`edge_delete` khi source thay đổi.
+
+### Cài đặt
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+### Chạy không cần Kafka
+
+```bash
+# Một file, lưu toàn bộ event thành JSONL
+python -m parser_service \
+  --repo accelerate \
+  --file src/accelerate/accelerator.py \
+  --dry-run \
+  --output-jsonl output/parser_events_smoke.jsonl
+
+# Toàn bộ 142 file, kiểm tra parser nhưng không giữ payload lớn
+python -m parser_service \
+  --repo accelerate \
+  --manifest output/file_discovery.json \
+  --discard-events
+
+# Replay incremental: bỏ qua mọi file không đổi
+python -m parser_service \
+  --repo accelerate \
+  --manifest output/file_discovery.json \
+  --discard-events \
+  --skip-unchanged
+```
+
+### Chạy với Kafka thật
+
+```bash
+docker compose up -d
+bash scripts/create_topics.sh
+
+python -m parser_service \
+  --repo accelerate \
+  --manifest output/file_discovery.json \
+  --bootstrap-servers localhost:9092
+```
+
+Trên Windows PowerShell, dùng `scripts/create_topics.ps1` và
+`scripts/verify_topics.ps1` thay cho hai script `.sh`.
+
+Nếu cần thực hiện Task 6, sửa một file rồi chỉ parse lại file đó:
+
+```bash
+python -m parser_service \
+  --repo accelerate \
+  --file src/accelerate/accelerator.py \
+  --bootstrap-servers localhost:9092
+```
+
+### Kiểm thử
+
+```bash
+python -m pytest -q
+```
+
+Kết quả đã nghiệm thu cục bộ:
+
+- `12 passed`.
+- `142/142` file parse thành công.
+- `193087` node, `240673` edge.
+- Edge: `187538 AST_CHILD`, `20540 CFG`, `21210 DFG`, `11385 CALL`.
+- Replay với `--skip-unchanged`: `142/142` file được skip.
+- File lớn `src/accelerate/accelerator.py`: peak Python allocation khoảng
+  `31.17 MiB`, thể hiện bộ nhớ bị giới hạn theo một file thay vì cả repo.
+
+Chi tiết phục vụ báo cáo: [`docs/task2_parser_service.md`](docs/task2_parser_service.md).
