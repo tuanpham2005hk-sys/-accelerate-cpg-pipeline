@@ -43,3 +43,58 @@ services:
       interval: 10s
       timeout: 10s
       retries: 15
+  
+  spark:
+    image: apache/spark:3.5.1-python3
+    container_name: cpg-spark
+    user: root
+    entrypoint: ["tail", "-f", "/dev/null"]
+    environment:
+      # Bắt buộc khai báo thủ công vì đã override entrypoint gốc của image
+      # apache/spark (script gốc mới là nơi tự thêm /opt/spark/bin vào PATH).
+      PATH: "/opt/spark/bin:/opt/spark/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      SPARK_HOME: "/opt/spark"
+    volumes:
+      - ./scripts:/opt/spark-jobs/scripts
+      - ./output:/opt/spark-jobs/output
+      - spark_ivy_cache:/root/.ivy2
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+
+  mongodb:
+    image: mongo:8.0
+    container_name: cpg-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  neo4j:
+    image: neo4j:5.15.0
+    container_name: cpg-neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/password
+      - NEO4J_PLUGINS=["apoc", "streams"]
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "password", "RETURN 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  mongodb_data:
+  neo4j_data:
+  spark_ivy_cache:

@@ -207,3 +207,11 @@ Kết quả đã nghiệm thu cục bộ:
   `31.17 MiB`, thể hiện bộ nhớ bị giới hạn theo một file thay vì cả repo.
 
 Chi tiết phục vụ báo cáo: [`docs/task2_parser_service.md`](docs/task2_parser_service.md).
+
+---
+
+## Phần 4 - Source Metadata Ingestion vào MongoDB (Spark Structured Streaming)
+
+Phần này hoàn thành **Việc 5** trong phân công công việc, chịu trách nhiệm xây dựng job Spark Structured Streaming để lưu trữ metadata của từng file Python từ Kafka vào MongoDB theo thời gian thực và đảm bảo tính idempotent.
+
+Chi tiết phục vụ báo cáo: [`docs/task5_spark_mongodb.md`](docs/task5_spark_mongodb.md).
