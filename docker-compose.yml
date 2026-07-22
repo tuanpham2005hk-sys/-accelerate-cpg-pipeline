@@ -5,11 +5,26 @@ services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1
     container_name: cpg-zookeeper
+    # Phần 3 debug note: nếu container bị OOM-kill do máy thiếu RAM, không
+    # có policy này thì container "chết đứng" -> mọi request sau đó (kể cả
+    # tới kafka-connect/neo4j) đều fail kiểu "container is not running".
+    # unless-stopped: tự khởi động lại trừ khi người dùng chủ động dừng.
+    restart: unless-stopped
     ports:
       - "2181:2181"
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+      # Máy RAM hạn chế (~7.6GB tổng) -> giới hạn heap tường minh, không để
+      # JVM tự auto-detect (có thể xin quá nhiều gây OOM khi chạy chung 4-5
+      # container Java cùng lúc).
+      KAFKA_HEAP_OPTS: "-Xms128m -Xmx256m"
+    volumes:
+      # Trước đây KHÔNG có volume -> mỗi lần container restart (kể cả do bị
+      # OOM-kill) là mất sạch metadata, kéo theo Kafka cũng phải làm lại từ
+      # đầu vì mismatch cluster id. Thêm volume để restart không phá dữ liệu.
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
     healthcheck:
       test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/2181"]
       interval: 10s
@@ -19,6 +34,7 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.6.1
     container_name: cpg-kafka
+    restart: unless-stopped
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -38,6 +54,16 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # Máy RAM hạn chế -> giới hạn heap tường minh (mặc định image có thể
+      # tự cấp phát tới 1G+ nếu không set).
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+    volumes:
+      # Không có volume trước đây -> restart là mất hết topic (node/edge/
+      # metadata/error events) LẪN 3 internal topic của Kafka Connect
+      # (cpg-connect-configs/offsets/status) -> connector cpg-neo4j-sink
+      # cũng "biến mất" theo, phải đăng ký lại từ đầu. Đây chính là điều đã
+      # xảy ra khi bạn thấy "container is not running".
+      - kafka_data:/var/lib/kafka/data
     healthcheck:
       test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
       interval: 10s
@@ -76,16 +102,32 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      # Ổ /mnt/* trên WSL2 chậm hơn ổ Linux gốc, mongod có thể chưa sẵn sàng
+      # trong 50s mặc định (5 lần retry x 10s) -> start_period cho thêm thời
+      # gian khởi động, không tính là fail trong khoảng này.
+      start_period: 60s
 
   neo4j:
     image: neo4j:5.15.0
     container_name: cpg-neo4j
+    restart: unless-stopped
     ports:
       - "7474:7474"
       - "7687:7687"
     environment:
+      # "streams" (Neo4j Streams cũ) không dùng nữa — pipeline này ingest từ
+      # NGOÀI vào Neo4j qua Kafka Connect worker riêng (service kafka-connect
+      # bên dưới), không phải plugin chạy bên trong Neo4j.
       - NEO4J_AUTH=neo4j/password
-      - NEO4J_PLUGINS=["apoc", "streams"]
+      - NEO4J_PLUGINS=["apoc"]
+      # apoc.do.when (dùng trong Cypher template của sink connector — Việc 4)
+      # gọi nội bộ apoc.cypher.* nên cần được "unrestrict" tường minh.
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+      # Máy RAM hạn chế -> giới hạn heap + page cache tường minh (mặc định
+      # Neo4j tự auto-size theo RAM hệ thống, có thể xin rất nhiều).
+      - NEO4J_server_memory_heap_initial__size=256m
+      - NEO4J_server_memory_heap_max__size=768m
+      - NEO4J_server_memory_pagecache_size=256m
     volumes:
       - neo4j_data:/data
     healthcheck:
@@ -94,7 +136,52 @@ services:
       timeout: 10s
       retries: 5
 
+  # Phần 3 — Việc 4: Kafka Connect worker chạy Neo4j Kafka Connector Sink.
+  # Plugin jar KHÔNG bundle sẵn (bản quyền/kích thước) — tải thủ công 1 lần
+  # theo hướng dẫn trong kafka-connect/plugins/README.md rồi mount vào đây.
+  kafka-connect:
+    image: confluentinc/cp-kafka-connect:7.6.1
+    container_name: cpg-kafka-connect
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+    volumes:
+      - ./kafka-connect/plugins:/usr/share/confluent-hub-components/neo4j-kafka-connector
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: kafka:29092
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: cpg-connect-cluster
+      CONNECT_CONFIG_STORAGE_TOPIC: cpg-connect-configs
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_TOPIC: cpg-connect-offsets
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_TOPIC: cpg-connect-status
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      # Message của mình là JSON thuần (kafka-python), không dùng Schema Registry
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
+      CONNECT_LOG4J_LOGGERS: "org.reflections=ERROR"
+      # Máy RAM hạn chế -> giới hạn heap tường minh.
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/connectors"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+
 volumes:
   mongodb_data:
   neo4j_data:
   spark_ivy_cache:
+  zookeeper_data:
+  zookeeper_log:
+  kafka_data:

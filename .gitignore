@@ -17,3 +17,6 @@ output/spark_checkpoint/
 # OS
 Thumbs.db
 .DS_Store
+
+# Neo4j Kafka Connector jar (~19MB, tải riêng theo kafka-connect/plugins/README.md)
+kafka-connect/plugins/*.jar
