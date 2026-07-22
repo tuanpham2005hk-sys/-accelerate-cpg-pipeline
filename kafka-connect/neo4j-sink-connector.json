@@ -1,0 +1,31 @@
+{
+  "name": "cpg-neo4j-sink",
+  "config": {
+    "topics": "cpg.node.events,cpg.edge.events",
+    "connector.class": "org.neo4j.connectors.kafka.sink.Neo4jConnector",
+    "tasks.max": "1",
+
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+
+    "errors.tolerance": "all",
+    "errors.log.enable": "true",
+    "errors.log.include.messages": "true",
+    "errors.deadletterqueue.topic.name": "cpg.neo4j.sink.dlq",
+    "errors.deadletterqueue.topic.replication.factor": "1",
+    "errors.deadletterqueue.context.headers.enable": "true",
+
+    "neo4j.uri": "neo4j://neo4j:7687",
+    "neo4j.authentication.type": "BASIC",
+    "neo4j.authentication.basic.username": "neo4j",
+    "neo4j.authentication.basic.password": "password",
+
+    "neo4j.cypher.bind-value-as": "__value",
+    "neo4j.cypher.bind-value-as-event": "false",
+
+    "neo4j.cypher.topic.cpg.node.events": "WITH __value AS event CALL apoc.do.when(event.event_type = 'node_upsert', 'MERGE (n:CPGNode {node_id: $event.node_id}) SET n.node_type = $event.node_type, n.name = $event.name, n.file_path = $event.file_path, n.scope = $event.scope, n.start_line = $event.start_line, n.end_line = $event.end_line, n.start_col = $event.start_col, n.end_col = $event.end_col, n.updated_at = $event.event_time, n += $event.properties RETURN count(n) AS affected', 'OPTIONAL MATCH (n:CPGNode {node_id: $event.node_id}) DETACH DELETE n RETURN count(n) AS affected', {event: event}) YIELD value RETURN value",
+
+    "neo4j.cypher.topic.cpg.edge.events": "WITH __value AS event CALL apoc.do.when(event.event_type = 'edge_upsert', 'MERGE (src:CPGNode {node_id: $event.src_node_id}) MERGE (dst:CPGNode {node_id: $event.dst_node_id}) MERGE (src)-[r:CPG_EDGE {edge_id: $event.edge_id}]->(dst) SET r.edge_type = $event.edge_type, r.file_path = $event.file_path, r.updated_at = $event.event_time RETURN count(r) AS affected', 'OPTIONAL MATCH ()-[r:CPG_EDGE {edge_id: $event.edge_id}]-() DELETE r RETURN count(r) AS affected', {event: event}) YIELD value RETURN value"
+  }
+}
