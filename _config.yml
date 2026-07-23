@@ -1,0 +1,41 @@
+title: Accelerate CPG Streaming Pipeline — Lab 04
+author: Nhóm Lab 04 (CSC14118 — Nhập môn Dữ liệu lớn)
+logo: ""
+
+execute:
+  execute_notebooks: "off"
+
+repository:
+  url: https://github.com/tuanpham2005hk-sys/-accelerate-cpg-pipeline
+  branch: main
+  path_to_book: ""
+
+html:
+  use_repository_button: true
+  use_issues_button: false
+  use_edit_page_button: false
+  favicon: ""
+
+parse:
+  myst_enable_extensions:
+    - colon_fence
+    - substitution
+
+exclude_patterns:
+  [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    "README.md",
+    "Lab04_PhanCongCongViec-3.md",
+    "kafka-connect/plugins/README.md",
+  ]
+
+sphinx:
+  extra_extensions:
+    - sphinxcontrib.mermaid
+  config:
+    html_show_copyright: false
+    suppress_warnings: ["myst.header"]
+    mermaid_version: "10.9.0"
+    myst_fence_as_directive: ["mermaid"]

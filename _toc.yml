@@ -1,0 +1,19 @@
+format: jb-book
+root: index
+chapters:
+  - file: docs/task1_intro
+    title: "1. Giới thiệu chung & Repository Cloning"
+  - file: docs/architecture
+    title: "2. Kiến trúc tổng thể"
+  - file: docs/task2_parser_service
+    title: "3. Incremental CPG Parser Service"
+  - file: docs/task3_kafka_topics
+    title: "4. Kafka Topic Design"
+  - file: docs/task4_neo4j_ingestion
+    title: "5. Graph Ingestion vào Neo4j"
+  - file: docs/task5_spark_mongodb
+    title: "6. Metadata Ingestion vào MongoDB"
+  - file: docs/task6_idempotent_replay
+    title: "7. Idempotent Replay Verification"
+  - file: docs/conclusion
+    title: "8. Kết luận & Reflection tổng thể"

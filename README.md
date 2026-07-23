@@ -200,8 +200,8 @@ Kết quả đã nghiệm thu cục bộ:
 
 - `12 passed`.
 - `142/142` file parse thành công.
-- `193087` node, `240673` edge.
-- Edge: `187538 AST_CHILD`, `20540 CFG`, `21210 DFG`, `11385 CALL`.
+- `193389` node, `241063` edge (khớp `output/parser_run_log.txt`, lần chạy full 142 file thật).
+- Edge: `187840 AST_CHILD`, `20573 CFG`, `21245 DFG`, `11405 CALL`.
 - Replay với `--skip-unchanged`: `142/142` file được skip.
 - File lớn `src/accelerate/accelerator.py`: peak Python allocation khoảng
   `31.17 MiB`, thể hiện bộ nhớ bị giới hạn theo một file thay vì cả repo.

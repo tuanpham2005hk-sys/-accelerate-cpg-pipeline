@@ -155,12 +155,12 @@ python -m parser_service --repo accelerate \
 | File trong manifest | 142 |
 | Parse thành công | 142 |
 | Parse thất bại | 0 |
-| Tổng node | 193,087 |
-| Tổng edge | 240,673 |
-| AST_CHILD | 187,538 |
-| CFG | 20,540 |
-| DFG | 21,210 |
-| CALL | 11,385 |
+| Tổng node | 193,389 |
+| Tổng edge | 241,063 |
+| AST_CHILD | 187,840 |
+| CFG | 20,573 |
+| DFG | 21,245 |
+| CALL | 11,405 |
 | Replay không đổi với `--skip-unchanged` | 142/142 skipped |
 | Peak allocation khi parse `accelerator.py` | 31.17 MiB |
 | Kafka topic verification | 4/4 PASS |
@@ -178,40 +178,11 @@ fixture đã được xóa sau khi kiểm tra.
 
 ## 8. Architecture Diagram toàn pipeline
 
-```mermaid
-flowchart TB
-    R[huggingface/accelerate\n197 .py / 142 kept]
-    P[Parser Service v1.0.0\nPython 3.12 + ast\none file at a time]
-    K[(Apache Kafka\nconfluentinc/cp-kafka:7.6.1)]
-    TN[cpg.node.events]
-    TE[cpg.edge.events]
-    TM[cpg.source.metadata.events]
-    TX[cpg.parser.error.events]
-    NC[Neo4j Kafka Connector Sink\nversion: confirm with Part 3]
-    N[(Neo4j\nversion: confirm with Part 3)]
-    S[Apache Spark Structured Streaming\nversion: confirm with Part 4]
-    MC[MongoDB Spark Connector\nversion: confirm with Part 4]
-    M[(MongoDB\nversion: confirm with Part 4)]
-    CP[(Spark checkpoint)]
-    DLQ[Parser error monitoring / logs]
-
-    R --> P --> K
-    K --> TN
-    K --> TE
-    K --> TM
-    K --> TX
-    TN --> NC
-    TE --> NC
-    NC -->|Cypher MERGE by stable ID| N
-    TM --> S --> MC -->|upsert by file_path| M
-    S <--> CP
-    TX --> DLQ
-```
-
-Nhánh graph đi trực tiếp Kafka -> Neo4j Kafka Connector -> Neo4j, không qua
-Spark. Chỉ metadata đi qua Spark Structured Streaming và MongoDB Spark
-Connector. Version của ba thành phần do Phần 3/4 cung cấp phải được thay vào
-sơ đồ trước khi publish Jupyter Book.
+> Sơ đồ kiến trúc chi tiết (kèm bảng version cụ thể từng thành phần) được trình
+> bày đầy đủ ở **Chương 2 — Kiến trúc tổng thể**. Mục này chỉ giữ lại một câu
+> tóm tắt để không lặp lại 2 sơ đồ khác nhau trong cùng cuốn sách: nhánh graph
+> đi trực tiếp Kafka → Neo4j Kafka Connector → Neo4j, không qua Spark; chỉ
+> nhánh metadata đi qua Spark Structured Streaming và MongoDB Spark Connector.
 
 ## 9. Reflection
 

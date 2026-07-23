@@ -204,3 +204,22 @@ Checkpoint chứng minh Spark Streaming Job có cơ chế lưu trạng thái/off
 Task 5 triển khai nhánh MongoDB của pipeline CPG (khác nhánh Neo4j dùng Kafka Connector Sink trực tiếp): Kafka → Spark Structured Streaming → MongoDB, với `file_path` map thành `_id` và `operationType = replace` để đảm bảo ghi idempotent, cùng checkpoint để resume đúng offset khi restart.
 
 Việc kiểm chứng đầy đủ tính idempotent xuyên suốt toàn pipeline (Neo4j + MongoDB + Spark checkpoint skip file không đổi) được trình bày ở chương **Việc 6 — Idempotent Replay Verification**.
+
+## 10. Reflection
+
+**Cái gì work:** dùng `file_path` làm `_id` document và ghi ở chế độ `replace`
+là lựa chọn đơn giản nhưng hiệu quả cho idempotency ở tầng MongoDB — không cần
+thêm logic upsert thủ công, vì driver Mongo tự đảm bảo "cùng `_id` thì cùng 1
+document". Việc tách checkpoint ra một thư mục riêng (`spark_checkpoint`) từ
+đầu, thay vì để Spark tự chọn vị trí mặc định, giúp việc quan sát offset ở
+Task 6 (đọc trực tiếp file `offsets/N`) làm được dễ dàng và minh bạch.
+
+**Cái gì cần lưu ý khi làm:** vì Task 5 phụ thuộc hoàn toàn vào dữ liệu do
+Parser Service (Việc 2) publish lên Kafka, job Spark phải được khởi động
+**sau** khi topic `cpg.source.metadata.events` đã có dữ liệu (hoặc chạy job
+trước rồi để nó tự đọc dần khi Parser Service publish) — nếu chạy job Spark
+khi Kafka Connect/broker chưa sẵn sàng sẽ báo lỗi kết nối ngay ở bước khởi
+tạo, phải khởi động lại đúng thứ tự service như mục 3. Việc kiểm chứng sâu
+hơn về khả năng chịu lỗi khi restart (mất tiến trình, mất container) được để
+dành riêng cho Task 6, nơi có đủ 3 người phụ trách Task 2/4/5 cùng đối chiếu
+số liệu chéo, thay vì kết luận vội ở đây khi chưa có bằng chứng restart thật.
