@@ -122,6 +122,64 @@ Ví dụ metadata thật của `accelerator.py`:
 }
 ```
 
+### Mẫu event node, edge và lỗi
+
+Các mẫu dưới đây lấy từ output JSONL của Parser Service. Mẫu `node_upsert` và
+`edge_upsert` được phát khi parse thật `accelerator.py`; mẫu `parse_error` được
+tạo bằng chính `parser_error_event()` với fixture Python lỗi cú pháp.
+
+```json
+{
+  "topic": "cpg.node.events",
+  "key": "src/accelerate/accelerator.py",
+  "value": {
+    "schema_version": "1.0.0",
+    "event_type": "node_upsert",
+    "node_id": "n:a85865ba4c8ad1c90d5efb73de0780d059e038de1af5bfe18c01e60312e24f2b",
+    "node_type": "ImportFrom",
+    "file_path": "src/accelerate/accelerator.py",
+    "scope": "<module>",
+    "start_line": 15,
+    "end_line": 15
+  }
+}
+```
+
+```json
+{
+  "topic": "cpg.edge.events",
+  "key": "n:a85865ba4c8ad1c90d5efb73de0780d059e038de1af5bfe18c01e60312e24f2b",
+  "value": {
+    "schema_version": "1.0.0",
+    "event_type": "edge_upsert",
+    "edge_id": "e:4107446bb9e55e24c40621191d442d27c7638e29889aa5b11559c75fe857aeea",
+    "edge_type": "AST_CHILD",
+    "src_node_id": "n:a85865ba4c8ad1c90d5efb73de0780d059e038de1af5bfe18c01e60312e24f2b",
+    "dst_node_id": "n:129b3d2df4f2e386d4fe857b30122d9db1b700bc63ca9ebe482e7152a1544d13",
+    "file_path": "src/accelerate/accelerator.py",
+    "properties": {"field": "names", "index": 0}
+  }
+}
+```
+
+```json
+{
+  "topic": "cpg.parser.error.events",
+  "key": "fixtures/broken.py",
+  "value": {
+    "schema_version": "1.0.0",
+    "event_type": "parse_error",
+    "error_id": "err:11fbc77b17475b25a6bdc109eae04725c4d57fe22b9822c78355d11ec0afba7c",
+    "repository": "huggingface/accelerate",
+    "file_path": "fixtures/broken.py",
+    "error_type": "SyntaxError",
+    "error_message": "invalid syntax",
+    "stage": "ast_parse",
+    "severity": "error"
+  }
+}
+```
+
 ## 6. Lệnh chạy
 
 ```bash
@@ -170,7 +228,34 @@ Các test xác minh stable ID, line shift, bốn loại edge, lexical scope củ
 internal/external call, replay không duplicate, delete event, skip unchanged,
 syntax/encoding error và CLI JSONL.
 
-Kafka thật dùng image `confluentinc/cp-kafka:7.6.1`, client
+### Bằng chứng thực thi
+
+Kết quả kiểm thử mới nhất và phần cuối của log chạy toàn bộ manifest:
+
+```console
+$ python -m pytest -q
+............                                                     [100%]
+12 passed in 0.49s
+
+$ tail output/parser_run_log.txt
+[140/142] SUCCEEDED src/accelerate/utils/versions.py nodes=144 edges=176
+[141/142] SUCCEEDED utils/log_reports.py nodes=906 edges=1123
+[142/142] SUCCEEDED utils/stale.py nodes=268 edges=316
+{
+  "files_total": 142,
+  "succeeded": 142,
+  "failed": 0,
+  "nodes": 193389,
+  "edges": 241063
+}
+```
+
+Ảnh terminal được render tự động từ đúng output trên, không nhập lại số liệu bằng tay:
+
+![Kết quả kiểm thử và parse toàn bộ manifest](../images/task2/parser-verification-terminal.png)
+
+Kafka thật dùng image Confluent Platform `confluentinc/cp-kafka:7.6.1`
+(chứa Apache Kafka 3.6.x), client
 `kafka-python 2.3.2`. Service đã publish file
 `src/accelerate/commands/accelerate_cli.py` và consume lại thành công node,
 edge, metadata. Một fixture syntax lỗi tạm thời cũng tạo `parse_error` thật;
